@@ -1,30 +1,53 @@
-import os
 import argparse
+import os
 from git_uploader import GitHubUploader
 from files import FileManager
 
-def upload_directory(uploader, repo_name, directory, commit_msg):
-    for root, _, files in os.walk(directory):
-        for file in files:
-            file_path = os.path.join(root, file)
-            uploader.upload_file(repo_name, file_path, commit_msg)
+def initialize_git_repo(path):
+    os.system(f"git init {path}")
 
 def main():
-    parser = argparse.ArgumentParser(description='Auto upload to GitHub.')
-    parser.add_argument('-p', '--path', type=str, default='.', help='Path to upload')
+    parser = argparse.ArgumentParser(description="Auto Git uploader")
+    parser.add_argument('-p', '--path', nargs='*', default=['.'], help="Path to files or directories to upload")
     args = parser.parse_args()
+
+    # Initialize git repo
+    initialize_git_repo('.')
 
     file_manager = FileManager()
     uploader = GitHubUploader()
+
     repos = uploader.list_repos()
-    selected_repo = uploader.select_repo(repos)
-    print(f"You selected: {selected_repo['name']}")
+    print("Available Repositories:")
+    print("0. Create a new repository")
+    for i, repo in enumerate(repos, start=1):
+        print(f"{i}. {repo['name']}")
+
+    choice = input("Enter the number of the repository to upload files to (default 0): ")
+    if choice == '' or choice == '0':
+        repo_name = input("Enter the name of the new repository: ")
+        selected_repo = uploader.create_repo(repo_name)
+    else:
+        selected_repo = repos[int(choice) - 1]
+
+    if args.path:
+        selected_files = args.path
+        print(f"You selected the following files: {', '.join(selected_files)}")
+        confirm = input("Do you want to upload these files? (Y/n): ")
+        if confirm.lower() == 'n':
+            selected_files = file_manager.select_files(file_manager.list_files())
+    else:
+        selected_files = file_manager.select_files(file_manager.list_files())
 
     commit_msg = input("Enter commit message: ")
-    if os.path.isdir(args.path):
-        upload_directory(uploader, selected_repo['name'], args.path, commit_msg)
-    else:
-        uploader.upload_file(selected_repo['name'], args.path, commit_msg)
+    for path in selected_files:
+        if os.path.isdir(path):
+            for root, _, files in os.walk(path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    uploader.upload_file(selected_repo['name'], file_path, commit_msg)
+        else:
+            uploader.upload_file(selected_repo['name'], path, commit_msg)
 
 if __name__ == "__main__":
     main()
