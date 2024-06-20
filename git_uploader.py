@@ -77,6 +77,8 @@ class GitHubUploader:
 
         with tqdm(total=total_size, desc=f"Uploading directory {directory_path}", unit='B', unit_scale=True) as pbar:
             for root, _, files in os.walk(directory_path):
+                if '.git' in root:
+                    continue
                 for file in files:
                     file_path = os.path.join(root, file)
                     with open(file_path, "rb") as f:
