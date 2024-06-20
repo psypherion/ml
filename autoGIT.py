@@ -1,5 +1,6 @@
 import argparse
 import os
+import logging
 from git_uploader import GitHubUploader
 from files import FileManager
 
@@ -7,11 +8,12 @@ def initialize_git_repo(path):
     os.system(f"git init {path}")
 
 def main():
+    logging.basicConfig(level=logging.INFO)
+    
     parser = argparse.ArgumentParser(description="Auto Git uploader")
     parser.add_argument('-p', '--path', nargs='*', default=['.'], help="Path to files or directories to upload")
     args = parser.parse_args()
 
-    # Initialize git repo
     initialize_git_repo('.')
 
     file_manager = FileManager()
