@@ -33,25 +33,21 @@ def main():
     if args.path:
         selected_files = args.path
         if '.' in selected_files:
-            print(f"You selected: all")
+            selected_files = file_manager.list_files()
         else:
-            print(f"You selected: {', '.join(selected_files)}")
-        
+            selected_files = [file for file in selected_files if os.path.exists(file)]
+
+        print(f"You selected: {selected_files}")
         confirm = input("Do you want to upload these files? (Y/n): ")
         if confirm.lower() == 'n':
-            selected_files = file_manager.select_files(file_manager.list_files())
+            selected_files = file_manager.select_files(selected_files)
+
     else:
         selected_files = file_manager.select_files(file_manager.list_files())
 
-    # Allow user to deselect files or directories
-    print("\nSelected files and directories:")
-    for i, file in enumerate(selected_files, start=1):
-        print(f"{i}. {file}")
-    
-    deselect_input = input("Enter numbers or names of files/directories to deselect (comma separated, or '.' for none): ").strip()
-    if deselect_input != '.':
-        deselections = [item.strip() for item in deselect_input.split(',')]
-        selected_files = [file for i, file in enumerate(selected_files, start=1) if str(i) not in deselections and file not in deselections]
+    if not selected_files:
+        print("No files selected. Exiting.")
+        return
 
     commit_msg = input("Enter commit message: ")
     for path in selected_files:
