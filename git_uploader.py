@@ -61,8 +61,8 @@ class GitHubUploader:
             "sha": sha
         }
 
-        # Progress bar setup
-        with tqdm(total=len(encoded_content), desc=f"Uploading {file_path}", unit='B', unit_scale=True) as pbar:
+        # Progress bar setup with file name
+        with tqdm(total=len(encoded_content), desc=f"Uploading file {file_path}", unit='B', unit_scale=True) as pbar:
             response = requests.put(url, headers=self.header, json=data)
             pbar.update(len(encoded_content))
 
@@ -76,9 +76,14 @@ class GitHubUploader:
         uploaded_size = 0
 
         with tqdm(total=total_size, desc=f"Uploading directory {directory_path}", unit='B', unit_scale=True) as pbar:
-            for root, _, files in os.walk(directory_path):
-                if '.git' in root:
+            for root, dirs, files in os.walk(directory_path):
+                if '.git' in root or '.history' in root:
                     continue
+                
+                # Print the directory being uploaded
+                if root != directory_path:
+                    print(f"Uploading directory: {root}")
+                
                 for file in files:
                     file_path = os.path.join(root, file)
                     with open(file_path, "rb") as f:
@@ -101,13 +106,3 @@ class GitHubUploader:
                         pbar.update(len(encoded_content))
                     else:
                         print(f"Failed to upload file '{file_path}'. Status code: {response.status_code}")
-
-# For testing the upload functionality directly
-if __name__ == "__main__":
-    uploader = GitHubUploader()
-    repos = uploader.list_repos()
-    selected_repo = uploader.select_repo(repos)
-    print(f"You selected: {selected_repo['name']}")
-    file_path = 'your_file.txt'
-    commit_message = 'Adding a new file'
-    uploader.upload_file(selected_repo['name'], file_path, commit_message)
