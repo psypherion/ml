@@ -17,19 +17,3 @@ class FileManager:
     @staticmethod
     def get_file_path(file_name):
         return os.path.join(os.getcwd(), file_name)
-
-
-if __name__ == "__main__":
-    # Create an instance of FileManager
-    file_manager = FileManager()
-
-    # List files in the current directory
-    files = file_manager.list_files()
-
-    # Select files to upload
-    selected_files = file_manager.select_files(files)
-    print(f"Selected files: {selected_files}")
-
-    # Get the file paths of selected files
-    file_paths = [file_manager.get_file_path(file) for file in selected_files]
-    print(f"File paths: {file_paths}")
