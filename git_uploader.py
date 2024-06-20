@@ -1,6 +1,8 @@
 import requests
 import configparser
 import base64
+from tqdm import tqdm
+import os
 
 class GitHubUploader:
     def __init__(self):
@@ -23,69 +25,58 @@ class GitHubUploader:
         repos = response.json()
         return repos
 
-    def select_repo(self, repos):
-        print("Available Repositories:")
-        for i, repo in enumerate(repos, start=1):
-            print(f"{i}. {repo['name']}")
-        while True:
-            choice = input("Enter the number of the repository to upload files to: ")
-            if choice.isdigit() and 1 <= int(choice) <= len(repos):
-                return repos[int(choice) - 1]
-            else:
-                print("Invalid choice. Please enter a valid number.")
+    def create_repo(self, repo_name):
+        url = 'https://api.github.com/user/repos'
+        data = {
+            "name": repo_name,
+            "private": False
+        }
+        response = requests.post(url, headers=self.header, json=data)
+        if response.status_code == 201:
+            print(f"Repository '{repo_name}' created successfully!")
+            return response.json()
+        else:
+            print(f"Failed to create repository '{repo_name}'. Status code: {response.status_code}")
+            return None
 
-    # def upload_file(self, repo_name, file_path, commit_message):
-    #     with open(file_path, "rb") as f:
-    #         file_content = f.read()
-    #     encoded_content = base64.b64encode(file_content).decode("utf-8")
-    #     url = f"https://api.github.com/repos/{self.owner}/{repo_name}/contents/{file_path}"
-    #     data = {"message": commit_message, "content": encoded_content}
-    #     response = requests.put(url, headers=self.header, json=data)
-    #     if response.status_code == 201:
-    #         print(f"File '{file_path}' uploaded successfully!")
-    #     else:
-    #         print(f"Failed to upload file '{file_path}'. Status code: {response.status_code}")
-    
+    def get_file_sha(self, repo_name, file_path):
+        url = f"https://api.github.com/repos/{self.owner}/{repo_name}/contents/{file_path}"
+        response = requests.get(url, headers=self.header)
+        if response.status_code == 200:
+            return response.json()['sha']
+        return None
+
     def upload_file(self, repo_name, file_path, commit_message):
         with open(file_path, "rb") as f:
             file_content = f.read()
         encoded_content = base64.b64encode(file_content).decode("utf-8")
-        url = f"https://api.github.com/repos/{self.owner}/{repo_name}/contents/{file_path}"
-        get_response = requests.get(url, headers=self.header)
-        if get_response.status_code == 200:
-            sha = get_response.json().get('sha')
-            data = {"message": commit_message, "content": encoded_content, "sha": sha}
-        else:
-            data = {"message": commit_message, "content": encoded_content}
-        response = requests.put(url, headers=self.header, json=data)
+        relative_path = os.path.relpath(file_path, start='.')
+        url = f"https://api.github.com/repos/{self.owner}/{repo_name}/contents/{relative_path}"
+
+        sha = self.get_file_sha(repo_name, relative_path)
+
+        data = {
+            "message": commit_message,
+            "content": encoded_content,
+            "sha": sha
+        }
+
+        # Progress bar setup
+        with tqdm(total=len(encoded_content), desc=f"Uploading {file_path}", unit='B', unit_scale=True) as pbar:
+            response = requests.put(url, headers=self.header, json=data)
+            pbar.update(len(encoded_content))
+
         if response.status_code in [200, 201]:
             print(f"File '{file_path}' uploaded successfully!")
         else:
             print(f"Failed to upload file '{file_path}'. Status code: {response.status_code}")
-            
-    def create_repo(self, repo_name):
-        url = 'https://api.github.com/user/repos'
-        data = {'name': repo_name}
-        response = requests.post(url, headers=self.header, json=data)
-        if response.status_code == 201:
-            print(f"Repository {repo_name} created successfully!")
-        else:
-            print(f"Failed to create repository {repo_name}. Status code: {response.status_code}")
 
-
-
-
-
+# For testing the upload functionality directly
 if __name__ == "__main__":
-    # Create an instance of GitHubUploader
     uploader = GitHubUploader()
-
-    # List repositories and select a repository
     repos = uploader.list_repos()
     selected_repo = uploader.select_repo(repos)
     print(f"You selected: {selected_repo['name']}")
-
-    # Specify the file path, commit message, and upload the file
-    file_path = 'allah.txt'
+    file_path = 'your_file.txt'
     commit_message = 'Adding a new file'
     uploader.upload_file(selected_repo['name'], file_path, commit_message)
