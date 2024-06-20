@@ -71,6 +71,35 @@ class GitHubUploader:
         else:
             print(f"Failed to upload file '{file_path}'. Status code: {response.status_code}")
 
+    def upload_directory(self, repo_name, directory_path, commit_message):
+        total_size = sum(os.path.getsize(os.path.join(root, file)) for root, _, files in os.walk(directory_path) for file in files)
+        uploaded_size = 0
+
+        with tqdm(total=total_size, desc=f"Uploading directory {directory_path}", unit='B', unit_scale=True) as pbar:
+            for root, _, files in os.walk(directory_path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    with open(file_path, "rb") as f:
+                        file_content = f.read()
+                    encoded_content = base64.b64encode(file_content).decode("utf-8")
+                    relative_path = os.path.relpath(file_path, start='.')
+                    url = f"https://api.github.com/repos/{self.owner}/{repo_name}/contents/{relative_path}"
+
+                    sha = self.get_file_sha(repo_name, relative_path)
+
+                    data = {
+                        "message": commit_message,
+                        "content": encoded_content,
+                        "sha": sha
+                    }
+
+                    response = requests.put(url, headers=self.header, json=data)
+                    if response.status_code in [200, 201]:
+                        uploaded_size += len(encoded_content)
+                        pbar.update(len(encoded_content))
+                    else:
+                        print(f"Failed to upload file '{file_path}'. Status code: {response.status_code}")
+
 # For testing the upload functionality directly
 if __name__ == "__main__":
     uploader = GitHubUploader()
