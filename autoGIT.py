@@ -43,12 +43,23 @@ def main():
     else:
         selected_files = file_manager.select_files(file_manager.list_files())
 
+    # Allow user to deselect files or directories
+    print("\nSelected files and directories:")
+    for i, file in enumerate(selected_files, start=1):
+        print(f"{i}. {file}")
+    
+    deselect_input = input("Enter numbers or names of files/directories to deselect (comma separated, or '.' for none): ").strip()
+    if deselect_input != '.':
+        deselections = [item.strip() for item in deselect_input.split(',')]
+        selected_files = [file for i, file in enumerate(selected_files, start=1) if str(i) not in deselections and file not in deselections]
+
     commit_msg = input("Enter commit message: ")
     for path in selected_files:
         if os.path.isdir(path):
-            print(f"Uploading directory {path}...")
+            print(f"Uploading directory: {path}")
             uploader.upload_directory(selected_repo['name'], path, commit_msg)
         else:
+            print(f"Uploading file: {path}")
             uploader.upload_file(selected_repo['name'], path, commit_msg)
 
 if __name__ == "__main__":
