@@ -75,14 +75,20 @@ class GitHubUploader:
         total_size = sum(os.path.getsize(os.path.join(root, file)) for root, _, files in os.walk(directory_path) for file in files)
         uploaded_size = 0
 
+        # Track top-level directories already printed
+        printed_dirs = set()
+
         with tqdm(total=total_size, desc=f"Uploading directory {directory_path}", unit='B', unit_scale=True) as pbar:
             for root, dirs, files in os.walk(directory_path):
                 if '.git' in root or '.history' in root:
                     continue
                 
-                # Only print the relative directory being uploaded, skip current directory '.'
-                if root != directory_path:
-                    print(f"Uploading directory: {os.path.relpath(root, start=directory_path)}")
+                # Determine if the directory is a top-level directory
+                top_level_dir = os.path.relpath(root, start=directory_path).split(os.sep)[0]
+
+                if top_level_dir not in printed_dirs and top_level_dir != '.':
+                    print(f"Uploading directory: {top_level_dir}")
+                    printed_dirs.add(top_level_dir)
                 
                 for file in files:
                     file_path = os.path.join(root, file)
