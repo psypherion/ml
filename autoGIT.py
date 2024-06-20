@@ -32,7 +32,11 @@ def main():
 
     if args.path:
         selected_files = args.path
-        print(f"You selected the following files: {', '.join(selected_files)}")
+        if '.' in selected_files:
+            print(f"You selected: all")
+        else:
+            print(f"You selected: {', '.join(selected_files)}")
+        
         confirm = input("Do you want to upload these files? (Y/n): ")
         if confirm.lower() == 'n':
             selected_files = file_manager.select_files(file_manager.list_files())
@@ -42,10 +46,8 @@ def main():
     commit_msg = input("Enter commit message: ")
     for path in selected_files:
         if os.path.isdir(path):
-            for root, _, files in os.walk(path):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    uploader.upload_file(selected_repo['name'], file_path, commit_msg)
+            print(f"Uploading directory {path}...")
+            uploader.upload_directory(selected_repo['name'], path, commit_msg)
         else:
             uploader.upload_file(selected_repo['name'], path, commit_msg)
 
