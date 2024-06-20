@@ -62,7 +62,7 @@ class GitHubUploader:
         }
 
         # Progress bar setup with file name
-        with tqdm(total=len(encoded_content), desc=f"Uploading file {file_path}", unit='B', unit_scale=True) as pbar:
+        with tqdm(total=len(encoded_content), desc=f"Uploading file {relative_path}", unit='B', unit_scale=True) as pbar:
             response = requests.put(url, headers=self.header, json=data)
             pbar.update(len(encoded_content))
 
@@ -78,16 +78,17 @@ class GitHubUploader:
         # Track top-level directories already printed
         printed_dirs = set()
 
-        with tqdm(total=total_size, desc=f"Uploading directory {directory_path}", unit='B', unit_scale=True) as pbar:
+        with tqdm(total=total_size, unit='B', unit_scale=True) as pbar:
             for root, dirs, files in os.walk(directory_path):
                 if '.git' in root or '.history' in root:
                     continue
                 
                 # Determine if the directory is a top-level directory
-                top_level_dir = os.path.relpath(root, start=directory_path).split(os.sep)[0]
+                relative_root = os.path.relpath(root, start=directory_path)
+                top_level_dir = relative_root.split(os.sep)[0]
 
-                if top_level_dir not in printed_dirs and top_level_dir != '.':
-                    print(f"Uploading directory: {top_level_dir}")
+                if top_level_dir not in printed_dirs and relative_root != '.':
+                    print(f"Uploading directory: {relative_root}")
                     printed_dirs.add(top_level_dir)
                 
                 for file in files:
@@ -95,7 +96,7 @@ class GitHubUploader:
                     with open(file_path, "rb") as f:
                         file_content = f.read()
                     encoded_content = base64.b64encode(file_content).decode("utf-8")
-                    relative_path = os.path.relpath(file_path, start='.')
+                    relative_path = os.path.relpath(file_path, start=directory_path)
                     url = f"https://api.github.com/repos/{self.owner}/{repo_name}/contents/{relative_path}"
 
                     sha = self.get_file_sha(repo_name, relative_path)
@@ -106,12 +107,14 @@ class GitHubUploader:
                         "sha": sha
                     }
 
-                    response = requests.put(url, headers=self.header, json=data)
-                    if response.status_code in [200, 201]:
-                        uploaded_size += len(encoded_content)
-                        pbar.update(len(encoded_content))
-                    else:
-                        print(f"Failed to upload file '{file_path}'. Status code: {response.status_code}")
+                    with tqdm(total=len(encoded_content), desc=f"Uploading file {relative_path}", unit='B', unit_scale=True) as file_pbar:
+                        response = requests.put(url, headers=self.header, json=data)
+                        if response.status_code in [200, 201]:
+                            uploaded_size += len(encoded_content)
+                            file_pbar.update(len(encoded_content))
+                            pbar.update(len(encoded_content))
+                        else:
+                            print(f"Failed to upload file '{file_path}'. Status code: {response.status_code}")
 
 # For testing the upload functionality directly
 if __name__ == "__main__":
