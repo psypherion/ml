@@ -80,9 +80,9 @@ class GitHubUploader:
                 if '.git' in root or '.history' in root:
                     continue
                 
-                # Print the directory being uploaded
+                # Only print the relative directory being uploaded, skip current directory '.'
                 if root != directory_path:
-                    print(f"Uploading directory: {root}")
+                    print(f"Uploading directory: {os.path.relpath(root, start=directory_path)}")
                 
                 for file in files:
                     file_path = os.path.join(root, file)
@@ -106,3 +106,13 @@ class GitHubUploader:
                         pbar.update(len(encoded_content))
                     else:
                         print(f"Failed to upload file '{file_path}'. Status code: {response.status_code}")
+
+# For testing the upload functionality directly
+if __name__ == "__main__":
+    uploader = GitHubUploader()
+    repos = uploader.list_repos()
+    selected_repo = uploader.select_repo(repos)
+    print(f"You selected: {selected_repo['name']}")
+    file_path = 'your_file.txt'
+    commit_message = 'Adding a new file'
+    uploader.upload_file(selected_repo['name'], file_path, commit_message)
