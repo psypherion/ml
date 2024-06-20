@@ -3,6 +3,7 @@ import configparser
 import base64
 from tqdm import tqdm
 import os
+import logging
 
 class GitHubUploader:
     def __init__(self):
@@ -20,104 +21,87 @@ class GitHubUploader:
         return owner, header
 
     def list_repos(self):
-        url = 'https://api.github.com/user/repos'
-        response = requests.get(url, headers=self.header)
-        repos = response.json()
-        return repos
+        try:
+            url = 'https://api.github.com/user/repos'
+            response = requests.get(url, headers=self.header)
+            response.raise_for_status()
+            repos = response.json()
+            return repos
+        except requests.RequestException as e:
+            logging.error(f"Failed to list repositories: {e}")
+            return []
 
     def create_repo(self, repo_name):
-        url = 'https://api.github.com/user/repos'
-        data = {
-            "name": repo_name,
-            "private": False
-        }
-        response = requests.post(url, headers=self.header, json=data)
-        if response.status_code == 201:
+        try:
+            url = 'https://api.github.com/user/repos'
+            data = {"name": repo_name, "private": False}
+            response = requests.post(url, headers=self.header, json=data)
+            response.raise_for_status()
             print(f"Repository '{repo_name}' created successfully!")
             return response.json()
-        else:
-            print(f"Failed to create repository '{repo_name}'. Status code: {response.status_code}")
+        except requests.RequestException as e:
+            logging.error(f"Failed to create repository '{repo_name}': {e}")
             return None
 
     def get_file_sha(self, repo_name, file_path):
-        url = f"https://api.github.com/repos/{self.owner}/{repo_name}/contents/{file_path}"
-        response = requests.get(url, headers=self.header)
-        if response.status_code == 200:
-            return response.json()['sha']
-        return None
+        try:
+            url = f"https://api.github.com/repos/{self.owner}/{repo_name}/contents/{file_path}"
+            response = requests.get(url, headers=self.header)
+            response.raise_for_status()
+            return response.json().get('sha')
+        except requests.RequestException:
+            return None
 
     def upload_file(self, repo_name, file_path, commit_message):
-        with open(file_path, "rb") as f:
-            file_content = f.read()
-        encoded_content = base64.b64encode(file_content).decode("utf-8")
-        relative_path = os.path.relpath(file_path, start='.')
-        url = f"https://api.github.com/repos/{self.owner}/{repo_name}/contents/{relative_path}"
+        try:
+            with open(file_path, "rb") as f:
+                file_content = f.read()
+            encoded_content = base64.b64encode(file_content).decode("utf-8")
+            relative_path = os.path.relpath(file_path, start='.')
+            url = f"https://api.github.com/repos/{self.owner}/{repo_name}/contents/{relative_path}"
 
-        sha = self.get_file_sha(repo_name, relative_path)
+            sha = self.get_file_sha(repo_name, relative_path)
 
-        data = {
-            "message": commit_message,
-            "content": encoded_content,
-            "sha": sha
-        }
+            data = {"message": commit_message, "content": encoded_content, "sha": sha}
 
-        # Progress bar setup with file name
-        with tqdm(total=len(encoded_content), desc=f"Uploading file {relative_path}", unit='B', unit_scale=True) as pbar:
-            response = requests.put(url, headers=self.header, json=data)
-            pbar.update(len(encoded_content))
+            with tqdm(total=len(encoded_content), desc=f"Uploading file {relative_path}", unit='B', unit_scale=True) as pbar:
+                response = requests.put(url, headers=self.header, json=data)
+                pbar.update(len(encoded_content))
 
-        if response.status_code in [200, 201]:
+            response.raise_for_status()
             print(f"File '{file_path}' uploaded successfully!")
-        else:
-            print(f"Failed to upload file '{file_path}'. Status code: {response.status_code}")
+        except (requests.RequestException, IOError) as e:
+            logging.error(f"Failed to upload file '{file_path}': {e}")
 
     def upload_directory(self, repo_name, directory_path, commit_message):
-        total_size = sum(os.path.getsize(os.path.join(root, file)) for root, _, files in os.walk(directory_path) for file in files)
-        uploaded_size = 0
+        try:
+            total_size = sum(os.path.getsize(os.path.join(root, file)) for root, _, files in os.walk(directory_path) for file in files)
+            uploaded_size = 0
 
-        # Track top-level directories already printed
-        printed_dirs = set()
+            printed_dirs = set()
 
-        with tqdm(total=total_size, unit='B', unit_scale=True) as pbar:
-            for root, dirs, files in os.walk(directory_path):
-                if '.git' in root or '.history' in root:
-                    continue
-                
-                # Determine if the directory is a top-level directory
-                relative_root = os.path.relpath(root, start=directory_path)
-                top_level_dir = relative_root.split(os.sep)[0]
+            with tqdm(total=total_size, unit='B', unit_scale=True) as pbar:
+                for root, dirs, files in os.walk(directory_path):
+                    if '.git' in root or '.history' in root:
+                        continue
 
-                if top_level_dir not in printed_dirs and relative_root != '.':
-                    print(f"Uploading directory: {relative_root}")
-                    printed_dirs.add(top_level_dir)
-                
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    with open(file_path, "rb") as f:
-                        file_content = f.read()
-                    encoded_content = base64.b64encode(file_content).decode("utf-8")
-                    relative_path = os.path.relpath(file_path, start=directory_path)
-                    url = f"https://api.github.com/repos/{self.owner}/{repo_name}/contents/{relative_path}"
+                    relative_root = os.path.relpath(root, start=directory_path)
+                    top_level_dir = relative_root.split(os.sep)[0]
 
-                    sha = self.get_file_sha(repo_name, relative_path)
+                    if top_level_dir not in printed_dirs and relative_root != '.':
+                        print(f"Uploading directory: {relative_root}")
+                        printed_dirs.add(top_level_dir)
 
-                    data = {
-                        "message": commit_message,
-                        "content": encoded_content,
-                        "sha": sha
-                    }
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        self.upload_file(repo_name, file_path, commit_message)
+                        uploaded_size += os.path.getsize(file_path)
+                        pbar.update(os.path.getsize(file_path))
+        except Exception as e:
+            logging.error(f"Failed to upload directory '{directory_path}': {e}")
 
-                    with tqdm(total=len(encoded_content), desc=f"Uploading file {relative_path}", unit='B', unit_scale=True) as file_pbar:
-                        response = requests.put(url, headers=self.header, json=data)
-                        if response.status_code in [200, 201]:
-                            uploaded_size += len(encoded_content)
-                            file_pbar.update(len(encoded_content))
-                            pbar.update(len(encoded_content))
-                        else:
-                            print(f"Failed to upload file '{file_path}'. Status code: {response.status_code}")
-
-# For testing the upload functionality directly
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     uploader = GitHubUploader()
     repos = uploader.list_repos()
     selected_repo = uploader.select_repo(repos)
